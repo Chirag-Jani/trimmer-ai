@@ -1,4 +1,11 @@
+import os
+
+from dotenv import load_dotenv
 from faster_whisper import WhisperModel
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
 
 _model = None
 
@@ -6,7 +13,7 @@ _model = None
 def _get_model():
     global _model
     if _model is None:
-        _model = WhisperModel("base", device="cpu", compute_type="int8")
+        _model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
     return _model
 
 
