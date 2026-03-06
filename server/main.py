@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from services.transcription import transcribe_audio
 from services.segmentation import identify_segments
-from services.video import extract_audio, trim_clip
+from services.video import extract_audio, build_clip
 
 app = FastAPI()
 app.add_middleware(
@@ -138,18 +138,17 @@ def _process(job_id: str):
         os.makedirs(clips_dir, exist_ok=True)
 
         clips = []
-        for i, seg in enumerate(segments):
+        for i, clip_def in enumerate(segments):
             clip_path = os.path.join(clips_dir, f"clip_{i + 1}.mp4")
-            trim_clip(job["video_path"], seg["start"], seg["end"], clip_path)
+            build_clip(job["video_path"], clip_def["segments"], clip_path)
             pct = 75 + int(25 * (i + 1) / len(segments))
             job["progress"] = min(pct, 99)
-            job["step"] = f"Trimming clip {i + 1}/{len(segments)}…"
+            job["step"] = f"Building clip {i + 1}/{len(segments)}…"
             clips.append({
                 "index": i,
-                "title": seg["title"],
-                "start": seg["start"],
-                "end": seg["end"],
-                "duration": round(seg["end"] - seg["start"], 1),
+                "title": clip_def["title"],
+                "segments": clip_def["segments"],
+                "duration": clip_def["duration"],
             })
 
         job["clips"] = clips

@@ -45,7 +45,14 @@ function ClipCard({ clip, jobId }) {
             <h3 className="truncate font-semibold text-zinc-200">
               {clip.title}
             </h3>
-            <p className="text-sm text-zinc-500">{clip.duration}s</p>
+            <p className="text-sm text-zinc-500">
+              {clip.duration}s
+              {clip.segments?.length > 1 && (
+                <span className="ml-1.5 text-violet-400/70">
+                  · {clip.segments.length} parts stitched
+                </span>
+              )}
+            </p>
           </div>
         </div>
 
@@ -130,43 +137,33 @@ function ClipCard({ clip, jobId }) {
           <p className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
             Source timestamps
           </p>
-          {clip.segments ? (
-            <div className="space-y-1">
-              {clip.segments.map((seg, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 text-sm text-zinc-400"
-                >
-                  <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
-                    {formatTime(seg.start)}
-                  </span>
-                  <span className="text-zinc-600">→</span>
-                  <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
-                    {formatTime(seg.end)}
-                  </span>
-                  <span className="text-zinc-600">
-                    ({(seg.end - seg.start).toFixed(1)}s)
-                  </span>
-                </div>
-              ))}
-              {clip.segments.length > 1 && (
-                <p className="mt-1 text-xs text-zinc-600">
-                  Combined from {clip.segments.length} sections
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-sm text-zinc-400">
-              <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
-                {formatTime(clip.start)}
-              </span>
-              <span className="text-zinc-600">→</span>
-              <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
-                {formatTime(clip.end)}
-              </span>
-              <span className="text-zinc-600">({clip.duration}s)</span>
-            </div>
-          )}
+          <div className="space-y-1.5">
+            {(clip.segments || []).map((seg, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-2 text-sm text-zinc-400"
+              >
+                {clip.segments.length > 1 && (
+                  <span className="w-5 text-xs text-zinc-600">#{i + 1}</span>
+                )}
+                <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
+                  {formatTime(seg.start)}
+                </span>
+                <span className="text-zinc-600">→</span>
+                <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
+                  {formatTime(seg.end)}
+                </span>
+                <span className="text-zinc-600">
+                  ({(seg.end - seg.start).toFixed(1)}s)
+                </span>
+              </div>
+            ))}
+            {clip.segments?.length > 1 && (
+              <p className="mt-1 text-xs text-violet-400/60">
+                {clip.segments.length} sections stitched into one clip
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

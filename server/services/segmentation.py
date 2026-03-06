@@ -17,8 +17,8 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 MAX_RETRIES = 3
-MIN_CLIP_SECONDS = 10
-MAX_CLIP_SECONDS = 90
+MIN_CLIP_SECONDS = 15
+MAX_CLIP_SECONDS = 50
 CLIP_COVERAGE_RATIO = 0.6
 
 
@@ -29,43 +29,74 @@ def _compute_max_clips(total_duration: float, requested: int) -> int:
 
 
 def _build_prompt(transcript_text: str, total_duration: float, count: int) -> str:
-    return f"""You are a professional short-form video editor. Your job is to pick the best clips from a longer video for Instagram Reels.
+    return f"""You are an elite short-form video editor. Your job: create the most engaging, viral-worthy Instagram Reels from a longer video.
 
-Below is a timestamped transcript. Find up to {count} clips that each work as a standalone, engaging short video.
+CRITICAL CONCEPT — STITCHING NON-CONTIGUOUS PARTS:
+A single clip does NOT have to be one continuous section of the video. You can combine multiple separate parts into one clip if they together tell a more complete or compelling story. Think like a documentary editor:
+- Speaker introduces a concept at 0:30, gives an example at 1:45, then delivers the punchline at 3:10? Stitch all three into ONE clip.
+- A great point is made at 0:20 but the supporting evidence comes at 2:00? Combine them.
+- Of course, if a section already works perfectly on its own, keep it as a single continuous segment.
 
 RULES:
-1. Each clip must be a COMPLETE thought — start where a sentence begins, end where the point is fully made. NEVER cut mid-sentence.
-2. "start" must equal the start timestamp of a transcript line. "end" must equal the end timestamp of a transcript line.
-3. Each clip: {MIN_CLIP_SECONDS}–{MAX_CLIP_SECONDS} seconds.
-4. No overlapping clips.
-5. Skip filler: greetings ("hey guys"), outros ("like and subscribe"), ums, repetition.
-6. Quality over quantity — only return clips that are genuinely interesting. If only 2 good moments exist, return 2.
-7. Vary clip lengths — NOT every clip the same duration.
+1. Each clip must tell ONE complete, self-contained story/argument. The viewer must understand it without seeing the full video.
+2. Segments within a clip must be in chronological order from the video.
+3. Every segment boundary must align with a sentence boundary — NEVER cut mid-sentence. Use the exact start/end timestamps from transcript lines.
+4. Total duration per clip (sum of all its segments): {MIN_CLIP_SECONDS}–{MAX_CLIP_SECONDS} seconds.
+5. A given time range must NOT appear in more than one clip.
+6. Quality over quantity. Return UP TO {count} clips, but if only 1 or 2 are genuinely great, return only those. Do NOT pad with mediocre clips.
+7. Skip all filler: greetings ("hey guys welcome"), outros ("like and subscribe"), throat-clearing, repetition.
+8. Give each clip a specific, catchy title (not generic like "Part 1").
 
-EXAMPLE:
+OUTPUT FORMAT — JSON array. Each clip has:
+- "title": string — short, specific, catchy
+- "segments": array of {{"start": <number>, "end": <number>}} objects
+
+EXAMPLE with a sample transcript:
 Transcript:
-[0.0s - 8.2s] Hey everyone welcome back to the channel.
-[8.2s - 22.5s] Most people think AI will replace all jobs but the data shows something completely different.
-[22.5s - 45.0s] A recent MIT study found only 23 percent of tasks could be automated cost-effectively. The rest need human judgment creativity and emotional intelligence.
-[45.0s - 58.3s] The jobs most at risk are not creative jobs. It is repetitive data entry and simple pattern matching.
-[58.3s - 70.0s] So if you want to be AI-proof focus on critical thinking empathy and complex problem solving.
-[70.0s - 82.0s] Anyway let me know in the comments and subscribe.
+[0.0s - 6.0s] Hey everyone welcome back let us dive in.
+[6.0s - 18.5s] Most people think AI will replace all jobs but a new MIT study says otherwise.
+[18.5s - 35.0s] They found only 23 percent of worker tasks can be automated cost-effectively right now.
+[35.0s - 48.0s] Let me give you an example. Graphic designers everyone thought they were done right.
+[48.0s - 62.0s] But turns out AI handles the repetitive resizing and formatting while designers focus on creative direction and client relationships.
+[62.0s - 78.0s] And here is what most people miss. The jobs at real risk are not creative ones. It is repetitive data entry and simple pattern matching.
+[78.0s - 90.0s] So the takeaway if you want to be AI-proof build skills machines cannot replicate. Critical thinking empathy complex problem solving.
+[90.0s - 100.0s] Drop your thoughts below and hit subscribe.
 
-Good output for 2 clips:
-[{{"start": 8.2, "end": 45.0, "title": "AI Won't Replace Most Jobs"}}, {{"start": 45.0, "end": 70.0, "title": "How to Be AI-Proof"}}]
+Good output (2 clips):
+[
+  {{
+    "title": "Why AI Won't Kill 77% of Jobs",
+    "segments": [
+      {{"start": 6.0, "end": 35.0}},
+      {{"start": 62.0, "end": 78.0}}
+    ]
+  }},
+  {{
+    "title": "The Graphic Designer Paradox",
+    "segments": [
+      {{"start": 35.0, "end": 62.0}},
+      {{"start": 78.0, "end": 90.0}}
+    ]
+  }}
+]
 
-Intro (0–8.2s) and outro (70–82s) skipped. Each clip is a complete argument. Lengths differ.
+Why this is good:
+- Clip 1 stitches the core thesis (6–35s) with the risk analysis (62–78s) — two non-contiguous parts that together make a complete argument.
+- Clip 2 combines the example (35–62s) with the actionable takeaway (78–90s).
+- Intro and outro skipped. Each clip is self-contained. Lengths vary. Titles are specific.
 
-BAD output (NEVER do this):
-[{{"start": 0, "end": 15, "title": "Part 1"}}, {{"start": 15, "end": 30, "title": "Part 2"}}]
-This is wrong — equal sequential chunks that cut mid-sentence with generic titles.
+BAD output:
+[{{"title": "Part 1", "segments": [{{"start": 0, "end": 20}}]}}, {{"title": "Part 2", "segments": [{{"start": 20, "end": 40}}]}}]
+This is wrong — sequential equal chunks, generic titles, cuts mid-thought, includes intro.
+
+Now here is the real transcript. Create up to {count} clips.
 
 VIDEO DURATION: {total_duration:.1f}s
 
 TRANSCRIPT:
 {transcript_text}
 
-Return ONLY a JSON array. No markdown, no explanation.
+Return ONLY a JSON array. No markdown fences, no explanation, no text before or after.
 JSON:"""
 
 
@@ -125,58 +156,85 @@ def identify_segments(
     for attempt in range(MAX_RETRIES):
         try:
             raw = call_fn(prompt)
-            segments = _parse_json_array(raw)
-            validated = _validate_segments(segments, transcript, effective_count)
+            parsed = _parse_json_array(raw)
+            validated = _validate_clips(parsed, transcript, effective_count)
             if validated:
                 return validated, adjusted_note
-        except (json.JSONDecodeError, KeyError, ValueError, Exception) as exc:
+        except Exception as exc:
             if attempt == MAX_RETRIES - 1:
                 raise RuntimeError(
-                    f"Could not get valid segments after {MAX_RETRIES} attempts "
+                    f"Could not get valid clips after {MAX_RETRIES} attempts "
                     f"({AI_PROVIDER}): {exc}"
                 )
 
     return [], adjusted_note
 
 
-def _validate_segments(
-    raw_segments: list[dict], transcript: list[dict], max_clips: int
+def _validate_clips(
+    raw_clips: list[dict], transcript: list[dict], max_clips: int
 ) -> list[dict]:
     total_duration = transcript[-1]["end"] if transcript else 0
+    used_ranges: list[tuple[float, float]] = []
     validated = []
 
-    for seg in raw_segments:
-        try:
-            start = max(0.0, float(seg["start"]))
-            end = min(total_duration, float(seg["end"]))
-        except (KeyError, TypeError, ValueError):
+    for clip in raw_clips:
+        title = str(clip.get("title", f"Clip {len(validated) + 1}"))
+
+        raw_segments = clip.get("segments")
+        if not raw_segments or not isinstance(raw_segments, list):
+            # Legacy single start/end format fallback
+            if "start" in clip and "end" in clip:
+                raw_segments = [{"start": clip["start"], "end": clip["end"]}]
+            else:
+                continue
+
+        clean_segs = []
+        clip_ok = True
+        for seg in raw_segments:
+            try:
+                s = max(0.0, float(seg["start"]))
+                e = min(total_duration, float(seg["end"]))
+            except (KeyError, TypeError, ValueError):
+                clip_ok = False
+                break
+
+            s = _snap_to_transcript(s, transcript, "start")
+            e = _snap_to_transcript(e, transcript, "end")
+
+            if e - s < 3:
+                clip_ok = False
+                break
+
+            # Check overlap with already-used ranges
+            for us, ue in used_ranges:
+                if not (e <= us or s >= ue):
+                    clip_ok = False
+                    break
+            if not clip_ok:
+                break
+
+            clean_segs.append({"start": round(s, 2), "end": round(e, 2)})
+
+        if not clip_ok or not clean_segs:
             continue
 
-        duration = end - start
-        if duration < MIN_CLIP_SECONDS or duration > MAX_CLIP_SECONDS:
+        total_clip_dur = sum(seg["end"] - seg["start"] for seg in clean_segs)
+        if total_clip_dur < MIN_CLIP_SECONDS or total_clip_dur > MAX_CLIP_SECONDS:
             continue
 
-        start = _snap_to_transcript(start, transcript, "start")
-        end = _snap_to_transcript(end, transcript, "end")
-
-        if end - start < MIN_CLIP_SECONDS:
-            continue
-
-        overlaps = any(
-            not (end <= v["start"] or start >= v["end"]) for v in validated
-        )
-        if overlaps:
-            continue
+        clean_segs.sort(key=lambda x: x["start"])
+        for seg in clean_segs:
+            used_ranges.append((seg["start"], seg["end"]))
 
         validated.append({
-            "start": round(start, 2),
-            "end": round(end, 2),
-            "title": str(seg.get("title", f"Clip {len(validated) + 1}")),
+            "title": title,
+            "segments": clean_segs,
+            "duration": round(total_clip_dur, 1),
         })
+
         if len(validated) >= max_clips:
             break
 
-    validated.sort(key=lambda s: s["start"])
     return validated
 
 
